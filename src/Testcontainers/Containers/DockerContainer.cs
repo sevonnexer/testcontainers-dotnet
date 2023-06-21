@@ -411,28 +411,22 @@ namespace DotNet.Testcontainers.Containers
     {
       ThrowIfLockNotAcquired();
 
-      async Task<bool> CheckPortBindingsAsync()
+      async Task<bool> CheckReadiness(WaitStrategy waitStrategy)
       {
         _container = await _client.InspectContainerAsync(_container.ID, ct)
           .ConfigureAwait(false);
 
-        var boundPorts = _container.NetworkSettings.Ports.Values.Where(portBindings => portBindings != null).SelectMany(portBinding => portBinding).Count(portBinding => !string.IsNullOrEmpty(portBinding.HostPort));
-        return _configuration.PortBindings == null || /* IPv4 or IPv6 */ _configuration.PortBindings.Count == boundPorts || /* IPv4 and IPv6 */ 2 * _configuration.PortBindings.Count == boundPorts;
-      }
-
-      async Task<bool> CheckWaitStrategyAsync(IWaitUntil wait)
-      {
-        _container = await _client.InspectContainerAsync(_container.ID, ct)
-          .ConfigureAwait(false);
-
-        return await wait.UntilAsync(this)
+        return await waitStrategy.UntilAsync(this, ct)
           .ConfigureAwait(false);
       }
 
       await _client.StartAsync(_container.ID, ct)
         .ConfigureAwait(false);
 
-      await WaitStrategy.WaitUntilAsync(CheckPortBindingsAsync, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(15), ct)
+      var portBindingsMappedWaitStrategy = new WaitStrategy();
+      _ = portBindingsMappedWaitStrategy.WithStrategy(new WaitUntilPortBindingsMapped(this));
+
+      await WaitStrategy.WaitUntilAsync(() => CheckReadiness(portBindingsMappedWaitStrategy), portBindingsMappedWaitStrategy.Interval, portBindingsMappedWaitStrategy.Timeout, ct)
         .ConfigureAwait(false);
 
       Starting?.Invoke(this, EventArgs.Empty);
@@ -444,7 +438,7 @@ namespace DotNet.Testcontainers.Containers
 
       foreach (var waitStrategy in _configuration.WaitStrategies)
       {
-        await WaitStrategy.WaitUntilAsync(() => CheckWaitStrategyAsync(waitStrategy), TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan, ct)
+        await WaitStrategy.WaitUntilAsync(() => CheckReadiness(waitStrategy), waitStrategy.Interval, waitStrategy.Timeout, ct)
           .ConfigureAwait(false);
       }
 
@@ -492,6 +486,22 @@ namespace DotNet.Testcontainers.Containers
     protected override bool Exists()
     {
       return ContainerHasBeenCreatedStates.HasFlag(State);
+    }
+
+    private sealed class WaitUntilPortBindingsMapped : IWaitUntil
+    {
+      private readonly DockerContainer _parent;
+
+      public WaitUntilPortBindingsMapped(DockerContainer parent)
+      {
+        _parent = parent;
+      }
+
+      public Task<bool> UntilAsync(IContainer _)
+      {
+        var boundPorts = _parent._container.NetworkSettings.Ports.Values.Where(portBindings => portBindings != null).SelectMany(portBinding => portBinding).Count(portBinding => !string.IsNullOrEmpty(portBinding.HostPort));
+        return Task.FromResult(_parent._configuration.PortBindings == null || /* IPv4 or IPv6 */ _parent._configuration.PortBindings.Count == boundPorts || /* IPv4 and IPv6 */ 2 * _parent._configuration.PortBindings.Count == boundPorts);
+      }
     }
   }
 }
