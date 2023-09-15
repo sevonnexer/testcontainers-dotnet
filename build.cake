@@ -76,7 +76,7 @@ Task("Tests")
   DotNetTest(param.Solution, new DotNetTestSettings
   {
     Configuration = param.Configuration,
-    Verbosity = param.Verbosity,
+    Verbosity = DotNetVerbosity.Detailed,
     NoRestore = true,
     NoBuild = true,
     Collectors = new[] { "XPlat Code Coverage;Format=opencover" },
