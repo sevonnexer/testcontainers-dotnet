@@ -17,11 +17,13 @@ public sealed class DockerClientTest : IAsyncLifetime
 
     public System.Threading.Tasks.Task InitializeAsync()
     {
+        return System.Threading.Tasks.Task.CompletedTask;
         return _dockerContainer.StartAsync();
     }
 
     public System.Threading.Tasks.Task DisposeAsync()
     {
+        return System.Threading.Tasks.Task.CompletedTask;
         return _dockerContainer.DisposeAsync().AsTask();
     }
 
@@ -60,7 +62,9 @@ public sealed class DockerClientTest : IAsyncLifetime
         // TODO: Fix the '$endpoint' scheme is not supported.
 
         // Given
-        var dockerClient = new DockerClient(endpoint, new HttpClient());
+        using var httpClient = new HttpClient(HttpMessageHandlerFactory.GetHttpMessageHandler(new Uri(endpoint)));
+
+        var dockerClient = new DockerClient(endpoint, httpClient);
 
         // When
         var systemInfo = await dockerClient.SystemInfoAsync()
