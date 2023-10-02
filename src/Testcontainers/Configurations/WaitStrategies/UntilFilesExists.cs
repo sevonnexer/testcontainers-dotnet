@@ -15,7 +15,15 @@ namespace DotNet.Testcontainers.Configurations
 
     public Task<bool> UntilAsync(IContainer container)
     {
-      return Task.FromResult(File.Exists(_file));
+      try
+      {
+        await container.ReadFileAsync(_file);
+        return true;
+      }
+      catch
+      {
+        return false;
+      }
     }
   }
 }
